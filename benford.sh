@@ -35,27 +35,27 @@ display_help() {
 }
 
 benford() {
-    readonly RAW_DATA=$*
-    readonly DIST=$(echo "${RAW_DATA}" | awk '/[1-9]/ {print $1}' | sort | cut -c1 | uniq -c)
+    local -r RAW_DATA=$*
+    local -r DIST=$(echo "${RAW_DATA}" | awk '/[1-9]/ {print $1}' | sort | cut -c1 | uniq -c)
 
     if [[ "${DIST}" == "" ]]; then
         echo "Empty data"
         return
     fi
 
-    readonly PERCENT=$(echo "${DIST}" | awk 'BEGIN { TOTAL=0; for (i=1; i<=9; i++) arr[i]=0; } { arr[$2]=$1; TOTAL+=$1 } END { for (i in arr) print i, arr[i]/TOTAL*100 }')
+    local -r PERCENT=$(echo "${DIST}" | awk 'BEGIN { TOTAL=0; for (i=1; i<=9; i++) arr[i]=0; } { arr[$2]=$1; TOTAL+=$1 } END { for (i in arr) print i, arr[i]/TOTAL*100 }')
     echo "${PERCENT}" | awk '{ ACTUALS=sprintf("%-*s", $2, ""); gsub(" ", "=", ACTUALS); STD=100*log((NR+1)/NR)/log(10); STDS=sprintf("%-*s", STD, ""); gsub(" ", "+", STDS); printf("%-2s%6.2f%% %s\n%-2s%6.2f%% %s\n", "", STD, STDS, $1, $2, ACTUALS)}'
 }
 
 csdn_data() {
-    readonly ID=$1
+    local -r ID=$1
     echo "csdn id: ${ID}" >&2
-    readonly URL_PREFIX="https://blog.csdn.net/${ID}/article/list/"
+    local -r URL_PREFIX="https://blog.csdn.net/${ID}/article/list/"
     echo "url prefix: ${URL_PREFIX}" >&2
-    readonly HTML="$(curl -s "${URL_PREFIX}")"
-    readonly PAGE_SIZE="$(echo "${HTML}" | grep "pageSize" | grep -E -o "[0-9]+")"
+    local -r HTML="$(curl -s "${URL_PREFIX}")"
+    local -r PAGE_SIZE="$(echo "${HTML}" | grep "pageSize" | grep -E -o "[0-9]+")"
     echo "page size: ${PAGE_SIZE}" >&2
-    readonly LIST_TOTAL="$(echo "${HTML}" | grep "listTotal" | grep -E -o "[0-9]+")"
+    local -r LIST_TOTAL="$(echo "${HTML}" | grep "listTotal" | grep -E -o "[0-9]+")"
     echo "list total: ${LIST_TOTAL}" >&2
     
     if (( LIST_TOTAL == 0 || PAGE_SIZE == 0 )); then
@@ -63,10 +63,10 @@ csdn_data() {
         return
     fi
     
-    readonly PAGE_COUNT="$(( (LIST_TOTAL - 1) / PAGE_SIZE + 1 ))"
+    local -r PAGE_COUNT="$(( (LIST_TOTAL - 1) / PAGE_SIZE + 1 ))"
     echo "page count: ${PAGE_COUNT}" >&2
     
-    readonly RAW_DATA=$(curl "${URL_PREFIX}{$(seq -s, 1 ${PAGE_COUNT})}" | grep "read-num" | grep "readCountWhite.png" | awk -F'[<>]' '{ print $5 }')
+    local -r RAW_DATA=$(curl "${URL_PREFIX}{$(seq -s, 1 ${PAGE_COUNT})}" | grep "read-num" | grep "readCountWhite.png" | awk -F'[<>]' '{ print $5 }')
     
     echo "${RAW_DATA}"
 }
@@ -92,12 +92,17 @@ main() {
     if [[ "${RAW_FILE}" == "" ]]; then
         shift $(( OPTIND - 1))
 
-        CSDN_ID="imred"
+        IDS="imred"
+
         if [ -n "$1" ]; then
-            CSDN_ID="$1"
+            IDS="$*"
         fi
 
-        RAW_DATA=$(csdn_data "${CSDN_ID}")
+        for CSDN_ID in ${IDS}; do
+            echo "===================="
+            RAW_DATA=$(csdn_data "${CSDN_ID}")
+            benford "${RAW_DATA}"
+        done
     else
         if ! [ -e "${RAW_FILE}" ]; then
             echo "File doesn't exist: ${RAW_FILE}"
@@ -105,9 +110,8 @@ main() {
         fi
             
         RAW_DATA=$(cat "${RAW_FILE}")
+        benford "${RAW_DATA}"
     fi
-
-    benford "${RAW_DATA}"
 }
 
 main "$@"
